@@ -27,7 +27,7 @@ npm run deploy
 
 ## Logging
 
-This project uses Sentry for error tracking and logging instead of console methods. The logging utility (`src/core/logger.ts`) provides the following methods:
+This project uses Sentry for error tracking and logging. The logging utility (`src/core/logger.ts`) provides the following methods:
 
 - `logger.debug(message, ...args)`
 - `logger.info(message, ...args)`

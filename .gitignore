@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Wrangler specific
+.wrangler/
+.dev.vars
+.env
+.dev.vars.example
+
+# Build output
+dist/
+worker/
+build/
+
+# Development
+.DS_Store
+*.log
+coverage/
+.coverage
+
+# IDE specific
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Cloudflare specific
+wrangler-local-state/
+.cloudflare/
+
+# TypeScript
+*.tsbuildinfo

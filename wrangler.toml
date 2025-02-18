@@ -1,0 +1,9 @@
+name = "worker-project"
+main = "src/index.ts"
+compatibility_date = "2024-02-22"
+
+[vars]
+ENVIRONMENT = "development"
+SENTRY_DSN = ""
+SENTRY_ENVIRONMENT = "development"
+SENTRY_RELEASE = "1.0.0"
