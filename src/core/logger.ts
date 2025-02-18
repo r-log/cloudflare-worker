@@ -1,4 +1,4 @@
-import * as Sentry from '@sentry/node';
+import * as Sentry from '@sentry/browser';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -14,23 +14,25 @@ class Logger {
     const logMessage = `[${timestamp}] [${level.toUpperCase()}] ${message}`;
     const context = args.length > 0 ? args[0] : undefined;
 
-    const breadcrumb = {
+    // Add breadcrumb for Sentry
+    Sentry.addBreadcrumb({
       type: 'debug',
       category: 'log',
       message: logMessage,
       level: this.getSentryLevel(level),
-      data: context as { [key: string]: any },
-    };
+      data: context as Record<string, unknown>,
+    });
 
-    Sentry.addBreadcrumb(breadcrumb);
-
+    // For errors, also capture them in Sentry
     if (level === 'error') {
       if (context instanceof Error) {
-        Sentry.captureException(context);
+        Sentry.captureException(context, {
+          extra: { message: logMessage }
+        });
       } else {
         Sentry.captureMessage(logMessage, {
           level: 'error',
-          extra: context as { [key: string]: any },
+          extra: context as Record<string, unknown>,
         });
       }
     }
