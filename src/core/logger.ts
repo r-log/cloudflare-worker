@@ -14,16 +14,23 @@ class Logger {
     const logMessage = `[${timestamp}] [${level.toUpperCase()}] ${message}`;
     const context = args.length > 0 ? args[0] : undefined;
 
-    // Add breadcrumb for Sentry
-    Sentry.addBreadcrumb({
-      type: 'debug',
-      category: 'log',
-      message: logMessage,
-      level: this.getSentryLevel(level),
-      data: context as Record<string, unknown>,
-    });
+    // Log to Cloudflare Worker logs
+    switch (level) {
+      case 'debug':
+        console.debug(logMessage, context);
+        break;
+      case 'info':
+        console.log(logMessage, context);
+        break;
+      case 'warn':
+        console.warn(logMessage, context);
+        break;
+      case 'error':
+        console.error(logMessage, context);
+        break;
+    }
 
-    // For errors, also capture them in Sentry
+    // Still keep Sentry for error tracking
     if (level === 'error') {
       if (context instanceof Error) {
         Sentry.captureException(context, {
@@ -35,21 +42,6 @@ class Logger {
           extra: context as Record<string, unknown>,
         });
       }
-    }
-  }
-
-  private getSentryLevel(level: LogLevel): Sentry.SeverityLevel {
-    switch (level) {
-      case 'debug':
-        return 'debug';
-      case 'info':
-        return 'info';
-      case 'warn':
-        return 'warning';
-      case 'error':
-        return 'error';
-      default:
-        return 'info';
     }
   }
 
@@ -83,4 +75,4 @@ class Logger {
   }
 }
 
-export const logger = new Logger(); 
+export const logger = new Logger();

@@ -155,10 +155,11 @@ export class ArticleCheckQueue {
   }
 }
 
-export async function mockArticleCheck(
+export async function performArticleCheck(
   prNumber: number,
   repoFullName: string,
-  githubToken: string
+  githubToken: string,
+  openRouterApiKey: string
 ): Promise<JobResult> {
   logger.info('Starting article check', { prNumber, repoFullName });
 
@@ -190,33 +191,53 @@ export async function mockArticleCheck(
     const mdFile = markdownFiles[0];
     const content = await fetchFileContent(mdFile.raw_url, githubToken);
     
-    // Validate article structure
-    const validator = new ArticleValidator();
-    const validationResult = validator.validateArticle(content);
+    // Validate article structure with duplication check
+    const validator = new ArticleValidator(githubToken, repoFullName);
+    const validationResult = await validator.validateArticle(content, mdFile.filename, openRouterApiKey);
 
     if (!validationResult.isValid) {
-      const errorMessages = validationResult.errors.map(err => `- ${err}`).join('\n');
-      const warningMessages = validationResult.warnings.map(warn => `- ${warn}`).join('\n');
-      const missingSection = validationResult.missingRequiredSections.map(section => `- ${section}`).join('\n');
-      const additionalSection = validationResult.additionalSections.map(section => `- ${section}`).join('\n');
+      let message = '### Article Validation Failed\n\n';
 
-      let message = '### Article Structure Validation Failed\n\n';
-      
+      if (validationResult.duplicationCheck?.isDuplicate) {
+        message = '### Article Validation Failed\n\n' +
+          '#### Duplication Check Results:\n' +
+          `This article appears to be a duplicate of: ${validationResult.duplicationCheck.existingFilePath}\n\n` +
+          '**Similarity Analysis:**\n';
+        
+        if (validationResult.duplicationCheck.comparisonResult?.similarityScore !== undefined) {
+          message += `- Similarity Score: ${(validationResult.duplicationCheck.comparisonResult.similarityScore * 100).toFixed(2)}%\n`;
+        }
+        return {
+          status: 'failure',
+          message,
+          details: validationResult
+        };
+      }
+
+      // Only show these validation messages if it's not a duplicate
       if (!validationResult.frontMatterValid) {
-        message += '#### Front Matter Issues:\n' + errorMessages + '\n\n';
+        message += '#### Front Matter Issues:\n' + 
+          validationResult.errors.filter(err => !err.includes('duplicate')).map(err => `- ${err}`).join('\n') +
+          '\n\n';
       }
       
       if (!validationResult.sectionsValid) {
         if (validationResult.missingRequiredSections.length > 0) {
-          message += '#### Missing Required Sections:\n' + missingSection + '\n\n';
+          message += '#### Missing Required Sections:\n' +
+            validationResult.missingRequiredSections.map(section => `- ${section}`).join('\n') +
+            '\n\n';
         }
         if (validationResult.additionalSections.length > 0) {
-          message += '#### Additional Unexpected Sections:\n' + additionalSection + '\n\n';
+          message += '#### Additional Unexpected Sections:\n' +
+            validationResult.additionalSections.map(section => `- ${section}`).join('\n') +
+            '\n\n';
         }
       }
 
-      if (warningMessages) {
-        message += '#### Warnings:\n' + warningMessages + '\n\n';
+      if (validationResult.warnings.length > 0) {
+        message += '#### Warnings:\n' +
+          validationResult.warnings.map(warn => `- ${warn}`).join('\n') +
+          '\n\n';
       }
 
       message += '#### Required Article Structure:\n' +
@@ -241,15 +262,26 @@ export async function mockArticleCheck(
       };
     }
 
+    let successMessage = '### Article Validation Successful! 🎉\n\n';
+    
+    if (validationResult.duplicationCheck?.comparisonResult?.hasNewInformation) {
+      successMessage += '#### New Information Detected\n' +
+        'While a similar article exists, this submission contains valuable new information:\n\n' +
+        validationResult.duplicationCheck.comparisonResult.differences?.map(diff => `- ${diff}`).join('\n') +
+        '\n\n';
+    }
+
+    successMessage += 'Your article follows all the required structure guidelines. Great job!\n\n' +
+      '#### Validated Components:\n' +
+      '- ✅ Front matter format and required fields\n' +
+      '- ✅ All required sections present\n' +
+      '- ✅ Section content validation\n' +
+      '- ✅ Duplication check\n\n' +
+      'The article is ready for review!';
+
     return {
       status: 'success',
-      message: '### Article Structure Validation Successful! 🎉\n\n' +
-        'Your article follows all the required structure guidelines. Great job!\n\n' +
-        '#### Validated Components:\n' +
-        '- ✅ Front matter format and required fields\n' +
-        '- ✅ All required sections present\n' +
-        '- ✅ Section content validation\n\n' +
-        'The article is ready for review!',
+      message: successMessage,
       details: {
         validationResult,
         filename: mdFile.filename

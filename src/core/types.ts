@@ -69,4 +69,17 @@ export interface ArticleValidationResult {
   sectionsValid: boolean;
   missingRequiredSections: string[];
   additionalSections: string[];
+  duplicationCheck?: DuplicationCheckResult;
+}
+
+export interface DuplicationCheckResult {
+  isDuplicate: boolean;
+  existingFilePath?: string;
+  comparisonResult?: ComparisonResult;
+}
+
+export interface ComparisonResult {
+  hasNewInformation: boolean;
+  differences?: string[];
+  similarityScore?: number;
 } 

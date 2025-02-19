@@ -17,10 +17,10 @@
     "@sentry/browser": "^9.1.0",
     "@sentry/cli": "^2.42.1",
     "@sentry/integrations": "^7.114.0",
+    "@types/uuid": "^9.0.0",
     "jose": "^4.0.0",
     "node": "^23.8.0",
     "uuid": "^9.0.0",
-    "@types/uuid": "^9.0.0",
     "yaml": "^2.3.4"
   },
   "devDependencies": {

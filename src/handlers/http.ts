@@ -1,7 +1,7 @@
 import { Env } from '../index';
 import { logger } from '../core/logger';
 import { getGitHubAppToken, verifyGitHubWebhook } from '../core/utils';
-import { ArticleCheckQueue, mockArticleCheck } from '../core/queue';
+import { ArticleCheckQueue, performArticleCheck } from '../core/queue';
 
 // Create a single instance of the queue manager
 const queueManager = new ArticleCheckQueue();
@@ -109,11 +109,12 @@ export async function handleHttpRequest(
 
               // If this is the current job, process it
               if (job.status === 'processing') {
-                // Mock article check process
-                const result = await mockArticleCheck(
+                // Perform article check
+                const result = await performArticleCheck(
                   payload.issue.number,
                   payload.repository.full_name,
-                  token
+                  token,
+                  env.OPENROUTER_API_KEY
                 );
                 
                 // Complete the job

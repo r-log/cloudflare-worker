@@ -11,6 +11,7 @@ export interface Env {
   GITHUB_PRIVATE_KEY: string; // GitHub App private key for JWT signing
   GITHUB_CLIENT_SECRET: string; // GitHub App client secret
   GITHUB_WEBHOOK_SECRET: string; // Secret for webhook verification
+  OPENROUTER_API_KEY: string;  // OpenRouter API key for article comparison
 }
 
 // Initialize Sentry

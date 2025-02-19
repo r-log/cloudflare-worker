@@ -8,3 +8,6 @@ ENVIRONMENT = "development"
 SENTRY_DSN = ""
 SENTRY_ENVIRONMENT = "development"
 SENTRY_RELEASE = "1.0.0"
+
+[observability.logs]
+enabled = true
