@@ -159,7 +159,9 @@ export async function performArticleCheck(
   prNumber: number,
   repoFullName: string,
   githubToken: string,
-  openRouterApiKey: string
+  openRouterApiKey: string,
+  claudeApiKey: string,
+  braveApiKey: string
 ): Promise<JobResult> {
   logger.info('Starting article check', { prNumber, repoFullName });
 
@@ -191,8 +193,8 @@ export async function performArticleCheck(
     const mdFile = markdownFiles[0];
     const content = await fetchFileContent(mdFile.raw_url, githubToken);
     
-    // Validate article structure with duplication check
-    const validator = new ArticleValidator(githubToken, repoFullName);
+    // Validate article structure with duplication check and fact checking
+    const validator = new ArticleValidator(githubToken, repoFullName, claudeApiKey, braveApiKey);
     const validationResult = await validator.validateArticle(content, mdFile.filename, openRouterApiKey);
 
     if (!validationResult.isValid) {
@@ -234,6 +236,27 @@ export async function performArticleCheck(
         }
       }
 
+      // Add fact-checking results if available
+      if (validationResult.factCheck) {
+        message += '#### Fact-Checking Results:\n';
+        
+        if (validationResult.factCheck.verifiedFacts.length > 0) {
+          message += '\n**Verified Facts:**\n' +
+            validationResult.factCheck.verifiedFacts
+              .map(fact => `- ${fact.statement} (Confidence: ${(fact.confidence * 100).toFixed(1)}%)\n  Sources: ${fact.sources.map(s => s.url).join(', ')}`).join('\n') +
+            '\n\n';
+        }
+
+        if (validationResult.factCheck.unreliableFacts.length > 0) {
+          message += '**Unreliable Facts:**\n' +
+            validationResult.factCheck.unreliableFacts
+              .map(fact => `- ${fact.statement}\n  Reason: ${fact.reason}${fact.suggestedCorrection ? `\n  Suggested Correction: ${fact.suggestedCorrection}` : ''}`).join('\n') +
+            '\n\n';
+        }
+
+        message += `**Overall Fact-Check Confidence:** ${(validationResult.factCheck.confidence * 100).toFixed(1)}%\n\n`;
+      }
+
       if (validationResult.warnings.length > 0) {
         message += '#### Warnings:\n' +
           validationResult.warnings.map(warn => `- ${warn}`).join('\n') +
@@ -271,12 +294,25 @@ export async function performArticleCheck(
         '\n\n';
     }
 
-    successMessage += 'Your article follows all the required structure guidelines. Great job!\n\n' +
-      '#### Validated Components:\n' +
+    // Add fact-checking success details
+    if (validationResult.factCheck) {
+      successMessage += '#### Fact-Checking Results\n' +
+        `Successfully verified ${validationResult.factCheck.verifiedFacts.length} facts with ${validationResult.factCheck.sourcesUsed.length} reliable sources.\n\n` +
+        '**Key Verified Facts:**\n' +
+        validationResult.factCheck.verifiedFacts
+          .filter(fact => fact.confidence > 0.8)
+          .map(fact => `- ${fact.statement} (${(fact.confidence * 100).toFixed(1)}% confidence)`).join('\n') +
+        '\n\n' +
+        `**Overall Fact-Check Confidence:** ${(validationResult.factCheck.confidence * 100).toFixed(1)}%\n\n`;
+    }
+
+    successMessage += '#### Validated Components:\n' +
       '- ✅ Front matter format and required fields\n' +
       '- ✅ All required sections present\n' +
       '- ✅ Section content validation\n' +
-      '- ✅ Duplication check\n\n' +
+      '- ✅ Duplication check\n' +
+      (validationResult.factCheck ? '- ✅ Fact verification\n' : '') +
+      '\n' +
       'The article is ready for review!';
 
     return {

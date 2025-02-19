@@ -9,7 +9,7 @@ const queueManager = new ArticleCheckQueue();
 export async function handleHttpRequest(
   request: Request,
   env: Env,
-  _ctx: ExecutionContext
+  ctx: ExecutionContext
 ): Promise<Response> {
   const url = new URL(request.url);
 
@@ -109,32 +109,69 @@ export async function handleHttpRequest(
 
               // If this is the current job, process it
               if (job.status === 'processing') {
-                // Perform article check
-                const result = await performArticleCheck(
-                  payload.issue.number,
-                  payload.repository.full_name,
-                  token,
-                  env.OPENROUTER_API_KEY
-                );
-                
-                // Complete the job
-                await queueManager.completeJob(job.id, result);
+                // Verify required API keys are present
+                if (!env.OPENROUTER_API_KEY || !env.CLAUDE_API_KEY || !env.BRAVE_API_KEY) {
+                  const missingKeys = [
+                    !env.OPENROUTER_API_KEY && 'OPENROUTER_API_KEY',
+                    !env.CLAUDE_API_KEY && 'CLAUDE_API_KEY',
+                    !env.BRAVE_API_KEY && 'BRAVE_API_KEY'
+                  ].filter(Boolean);
 
-                // Post completion comment
-                await postGitHubComment(
-                  payload.repository.full_name,
-                  payload.issue.number,
-                  `### 🤖 ArticleChecker Bot - Analysis Complete\n\n` +
-                  `#### Status: ${result.status === 'success' ? '✅ Success' : '❌ Failed'}\n\n` +
-                  `${result.message}\n\n` +
-                  `**Analysis Details:**\n` +
-                  `- **PR:** #${job.prNumber}\n` +
-                  `- **Repository:** ${job.repoFullName}\n` +
-                  `- **Job ID:** \`${job.id}\`\n\n` +
-                  `---\n` +
-                  `*Need another check? Just comment \`/articlecheck\` again!*`,
-                  token
-                );
+                  logger.error('Missing required API keys:', { missingKeys });
+                  
+                  await queueManager.completeJob(job.id, {
+                    status: 'failure',
+                    message: '### ❌ Configuration Error\n\n' +
+                      'The article check could not be completed due to missing API keys. ' +
+                      'Please contact the repository administrators.',
+                    details: { error: `Missing required API keys: ${missingKeys.join(', ')}` }
+                  });
+
+                  return new Response(JSON.stringify({
+                    error: 'Missing required API keys',
+                    missingKeys
+                  }), { 
+                    status: 500,
+                    headers: { 'Content-Type': 'application/json' }
+                  });
+                }
+
+                // Use waitUntil for the long-running article check
+                ctx.waitUntil((async () => {
+                  try {
+                    logger.info('Starting article check in background');
+                    const result = await performArticleCheck(
+                      payload.issue.number,
+                      payload.repository.full_name,
+                      token,
+                      env.OPENROUTER_API_KEY,
+                      env.CLAUDE_API_KEY,
+                      env.BRAVE_API_KEY
+                    );
+                    
+                    // Complete the job
+                    await queueManager.completeJob(job.id, result);
+
+                    // Post completion comment
+                    await postGitHubComment(
+                      payload.repository.full_name,
+                      payload.issue.number,
+                      `### 🤖 ArticleChecker Bot - Analysis Complete\n\n` +
+                      `#### Status: ${result.status === 'success' ? '✅ Success' : '❌ Failed'}\n\n` +
+                      `${result.message}\n\n` +
+                      `**Analysis Details:**\n` +
+                      `- **PR:** #${job.prNumber}\n` +
+                      `- **Repository:** ${job.repoFullName}\n` +
+                      `- **Job ID:** \`${job.id}\`\n\n` +
+                      `---\n` +
+                      `*Need another check? Just comment \`/articlecheck\` again!*`,
+                      token
+                    );
+                    logger.info('Background article check completed successfully');
+                  } catch (error) {
+                    logger.error('Error in background article check:', error);
+                  }
+                })());
               }
               
               return new Response(JSON.stringify({
